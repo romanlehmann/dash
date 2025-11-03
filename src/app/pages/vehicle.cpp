@@ -108,7 +108,7 @@ QString Gauge::null_value()
 
 VehiclePage::VehiclePage(Arbiter &arbiter, QWidget *parent)
     : QTabWidget(parent)
-    , Page(arbiter, "Vehicle", "directions_car", true, this)
+    , Page(arbiter, "Vehicle", "motocycle", true, this)
 {
 }
 

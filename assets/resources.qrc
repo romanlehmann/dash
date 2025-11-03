@@ -4,6 +4,7 @@
         <file>camera_video.qml</file>
         <file>camera_overlay.svg</file>
         <file>splash.png</file>
+        <file>splash.svg</file>
         <file>icons/play.svg</file>
         <file>icons/pause.svg</file>
         <file>icons/stop.svg</file>
@@ -15,7 +16,7 @@
         <file>icons/tune.svg</file>
         <file>icons/skip_next.svg</file>
         <file>icons/skip_previous.svg</file>
-        <file>icons/directions_car.svg</file>
+        <file>icons/motocycle.svg</file>
         <file>icons/volume_down.svg</file>
         <file>icons/volume_up.svg</file>
         <file>icons/check.svg</file>

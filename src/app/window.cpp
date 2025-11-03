@@ -93,7 +93,18 @@ void Dash::init()
     }
     this->set_page(this->arbiter.layout().curr_page);
 
+    // Füge die Control Bar hinzu
     this->body.control_bar->addWidget(this->control_bar());
+
+    {
+        auto dark_mode = new QPushButton();
+        dark_mode->setFlat(true);
+        this->arbiter.forge().iconize("dark_mode", dark_mode, 26);
+        connect(dark_mode, &QPushButton::clicked, [this]{ this->arbiter.toggle_mode(); });
+
+        // ans Ende der NavRail (links) hinzufügen
+        this->rail.layout->addWidget(dark_mode);
+    }
 }
 
 void Dash::set_page(Page *page)
@@ -147,6 +158,19 @@ QWidget *Dash::control_bar() const
     connect(&this->arbiter, &Arbiter::curr_quick_view_changed, [quick_views](QuickView *quick_view){
         quick_views->setCurrentWidget(quick_view->widget());
     });
+
+    // Pioneer Logo in der Mitte
+    auto logoLabel = new QLabel();
+    logoLabel->setObjectName("PioneerLogo");
+    QPixmap logo(":/splash.svg");
+    if (!logo.isNull()) {
+        logoLabel->setPixmap(logo.scaledToHeight(26, Qt::SmoothTransformation));
+
+         layout->addWidget(logoLabel);
+         layout->setAlignment(logoLabel, Qt::AlignRight | Qt::AlignVCenter);
+    } else {
+        DASH_LOG(info) << "No logo found!";
+    }
 
     layout->addStretch();
 
