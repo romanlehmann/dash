@@ -68,3 +68,4 @@ openauto.ini
 plugins/vehicle/*
 !plugins/vehicle/test
 !plugins/vehicle/README.md
+!plugins/vehicle/bike

@@ -116,9 +116,9 @@ VehiclePage::VehiclePage(Arbiter &arbiter, QWidget *parent)
 
 void VehiclePage::init()
 {
-    this->addTab(new DataTab(this->arbiter, this), "Data");
-    this->config = Config::get_instance();
-
+    this->addTab(new DataTab(this->arbiter, this), "Odometer");
+        this->config = Config::get_instance();
+ 
     for (auto device : QCanBus::instance()->availableDevices("socketcan"))
         this->can_devices.append(device.name());
 
@@ -389,8 +389,8 @@ DataTab::DataTab(Arbiter &arbiter, QWidget *parent)
             if (this->rpmLabel)
                 this->rpmLabel->setText(
                     QString::number(rpm, 'f', 0));
-            if (this->gearLabel)
-                this->gearLabel->setText(QString::number(gear));
+            if (this->gearLabel) 
+                this->gearLabel->setText(gear == 0 ? "N" : QString::number(gear));
             if (this->coolantLabel)
                 this->coolantLabel->setText(
                     QString::number(temp, 'f', 1));
@@ -432,7 +432,6 @@ DataTab::DataTab(Arbiter &arbiter, QWidget *parent)
     // Wenn der Server noch nicht läuft, gibt es einen Fehler und
     // der Fehler-Handler startet den Reconnect-Timer
 }
-
 
 
 QWidget *DataTab::speedo_tach_widget()

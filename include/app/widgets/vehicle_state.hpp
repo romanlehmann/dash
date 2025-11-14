@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QWidget>
+#include <QFrame>
 #include <QDomDocument>
 
 #include "app/config.hpp"
