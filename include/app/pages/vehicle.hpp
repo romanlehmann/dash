@@ -13,6 +13,12 @@
 
 #include "app/pages/page.hpp"
 
+#include <QLocalSocket>
+#include <QByteArray>
+#include <QLabel>
+#include <QTimer>
+
+
 class Arbiter;
 
 typedef std::function<double(double, bool)> obd_decoder_t;
@@ -88,5 +94,22 @@ class DataTab : public QWidget {
     QWidget *engine_load_widget();
 
     std::vector<Gauge *> gauges;
+
+    // NEU: Widget, das die Vehicle-Data vom Socket anzeigt
+    QWidget *vehicle_data_widget();
+
+    // NEU: Client-State für vehicle_data
+    QLocalSocket *vehicleSocket = nullptr;
+    QByteArray vehicleBuffer;
+    // NEU: Timer für Reconnect
+    QTimer *vehicleReconnectTimer = nullptr;
+
+    // NEU: Labels für die einzelnen Werte
+    QLabel *speedLabel = nullptr;
+    QLabel *rpmLabel = nullptr;
+    QLabel *gearLabel = nullptr;
+    QLabel *coolantLabel = nullptr;
+    QLabel *odoLabel = nullptr;
+    QLabel *fuelLabel = nullptr;
 };
 

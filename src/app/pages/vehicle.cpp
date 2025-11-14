@@ -8,6 +8,8 @@
 #include "canbus/elm327.hpp"
 #include "plugins/vehicle_plugin.hpp"
 
+
+
 Gauge::Gauge(units_t units, QFont value_font, QFont unit_font, Gauge::Orientation orientation, int rate,
              std::vector<Command> cmds, int precision, obd_decoder_t decoder, QWidget *parent)
 : QWidget(parent)
@@ -333,22 +335,105 @@ DataTab::DataTab(Arbiter &arbiter, QWidget *parent)
 {
     QHBoxLayout *layout = new QHBoxLayout(this);
 
-    QWidget *driving_data = this->speedo_tach_widget();
-    layout->addWidget(driving_data);
-    layout->addWidget(Session::Forge::br(true));
+    QWidget *vehicleData = this->vehicle_data_widget();
+    layout->addWidget(vehicleData);
 
-    QWidget *engine_data = this->engine_data_widget();
-    layout->addWidget(engine_data);
+    // Socket anlegen
+    this->vehicleSocket = new QLocalSocket(this);
 
-    QSizePolicy sp_left(QSizePolicy::Preferred, QSizePolicy::Preferred);
-    sp_left.setHorizontalStretch(5);
-    driving_data->setSizePolicy(sp_left);
-    QSizePolicy sp_right(QSizePolicy::Preferred, QSizePolicy::Preferred);
-    sp_right.setHorizontalStretch(2);
-    engine_data->setSizePolicy(sp_right);
-    for (auto &gauge : this->gauges)
-        gauge->start();
+    // Reconnect-Timer anlegen
+    this->vehicleReconnectTimer = new QTimer(this);
+    this->vehicleReconnectTimer->setInterval(2000);     // alle 2 Sekunden
+    this->vehicleReconnectTimer->setSingleShot(false);
+
+    // Wenn der Timer feuert und wir sind nicht verbunden -> neu versuchen
+    connect(this->vehicleReconnectTimer, &QTimer::timeout, this, [this]() {
+        if (!this->vehicleSocket)
+            return;
+
+        if (this->vehicleSocket->state()
+                == QLocalSocket::UnconnectedState) {
+            this->vehicleSocket->connectToServer(
+                QStringLiteral("vehicle_data"));
+        }
+        // Wenn wir schon Connected/Connecting sind, macht der Timer nichts
+    });
+
+    // Wenn Daten ankommen
+    connect(this->vehicleSocket, &QLocalSocket::readyRead,
+            this, [this]() {
+        this->vehicleBuffer.append(this->vehicleSocket->readAll());
+
+        int index = -1;
+        while ((index = this->vehicleBuffer.indexOf('\n')) != -1) {
+            QByteArray line = this->vehicleBuffer.left(index);
+            this->vehicleBuffer.remove(0, index + 1);
+
+            QJsonParseError err;
+            QJsonDocument doc = QJsonDocument::fromJson(line, &err);
+            if (err.error != QJsonParseError::NoError || !doc.isObject())
+                continue;
+
+            QJsonObject obj = doc.object();
+
+            double speedKmh = obj.value("kmh").toDouble();
+            double rpm      = obj.value("rpm").toDouble();
+            int    gear     = obj.value("gear").toInt();
+            double temp     = obj.value("temperature").toDouble();
+            double odometer = obj.value("odometer").toDouble();
+            double fuel     = obj.value("fuelLevel").toDouble();
+
+            if (this->speedLabel)
+                this->speedLabel->setText(
+                    QString::number(speedKmh, 'f', 0));
+            if (this->rpmLabel)
+                this->rpmLabel->setText(
+                    QString::number(rpm, 'f', 0));
+            if (this->gearLabel)
+                this->gearLabel->setText(QString::number(gear));
+            if (this->coolantLabel)
+                this->coolantLabel->setText(
+                    QString::number(temp, 'f', 1));
+            if (this->odoLabel)
+                this->odoLabel->setText(
+                    QString::number(odometer, 'f', 1));
+            if (this->fuelLabel)
+                this->fuelLabel->setText(
+                    QString::number(fuel * 100.0, 'f', 0) + "%");
+        }
+    });
+
+    // Verbunden -> Reconnect-Timer stoppen
+    connect(this->vehicleSocket, &QLocalSocket::connected,
+            this, [this]() {
+        if (this->vehicleReconnectTimer)
+            this->vehicleReconnectTimer->stop();
+    });
+
+    // Getrennt -> Reconnect-Timer starten
+    connect(this->vehicleSocket, &QLocalSocket::disconnected,
+            this, [this]() {
+        if (this->vehicleReconnectTimer)
+            this->vehicleReconnectTimer->start();
+    });
+
+    // Fehler -> Reconnect-Timer starten
+    connect(this->vehicleSocket,
+            qOverload<QLocalSocket::LocalSocketError>(
+                &QLocalSocket::errorOccurred),
+            this, [this](QLocalSocket::LocalSocketError) {
+        if (this->vehicleReconnectTimer)
+            this->vehicleReconnectTimer->start();
+    });
+
+    // Erster Verbindungsversuch
+    this->vehicleSocket->connectToServer(
+        QStringLiteral("vehicle_data"));
+    // Wenn der Server noch nicht läuft, gibt es einen Fehler und
+    // der Fehler-Handler startet den Reconnect-Timer
 }
+
+
 
 QWidget *DataTab::speedo_tach_widget()
 {
@@ -389,36 +474,6 @@ QWidget *DataTab::speedo_tach_widget()
     return widget;
 }
 
-/*  socketcan/elm327 rewrite right now only has support for one PID per gauge, so we can't calculate milage at this point.
-    This is because gauges act more as event handlers now for each PID. 
-    Multi-PID gauges could feasibly be reimplemented if there was a helper method that stored received values, and only calls
-    the gauge update once all values have been updated since last gauge update.
-
-*/
-
-// QWidget *DataTab::mileage_data_widget()
-// {
-//     QWidget *widget = new QWidget(this);	
-//	   QHBoxLayout *layout = new QHBoxLayout(widget);	
-//		
-//	   QFont value_font(Theme::font_36);	
-//	   value_font.setFamily("Titillium Web");	
-//		
-//	   QFont unit_font(Theme::font_14);	
-//	   unit_font.setWeight(QFont::Light);	
-//	   unit_font.setItalic(true);
-//
-//     Gauge *mileage = new Gauge({"mpg", "km/L"}, value_font, unit_font,
-//                                Gauge::BOTTOM, 100, {cmds.SPEED, cmds.MAF}, 1,
-//                                [](std::vector<double> x, bool si) {
-//                                    return (si ? x[0] : kph_to_mph(x[0])) / (si ? gps_to_lph(x[1]) : gps_to_gph(x[1]));
-//                                },
-//                                widget);
-//     layout->addWidget(mileage);
-//     this->gauges.push_back(mileage);
-
-//     return widget;
-// }
 
 QWidget *DataTab::engine_data_widget()
 {
@@ -494,5 +549,60 @@ QWidget *DataTab::engine_load_widget()
     engine_load_label->setFont(label_font);
     engine_load_label->setAlignment(Qt::AlignHCenter);
     layout->addWidget(engine_load_label);
+    return widget;
+}
+
+QWidget *DataTab::vehicle_data_widget()
+{
+    QWidget *widget = new QWidget(this);
+    QGridLayout *layout = new QGridLayout(widget);
+    layout->setContentsMargins(10, 10, 10, 10);
+    layout->setHorizontalSpacing(20);
+    layout->setVerticalSpacing(8);
+
+    QFont valueFont = this->arbiter.forge().font(24, true);
+    QFont labelFont = this->arbiter.forge().font(10);
+    labelFont.setWeight(QFont::Light);
+
+    int row = 0;
+
+    auto makeRow = [&](const QString &labelText,
+                       QLabel **valueLabelPtr,
+                       const QString &unitText) {
+        QLabel *label = new QLabel(labelText, widget);
+        label->setFont(labelFont);
+        label->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+
+        QLabel *value = new QLabel("-", widget);
+        value->setFont(valueFont);
+        value->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+
+        QLabel *unit = nullptr;
+        if (!unitText.isEmpty()) {
+            unit = new QLabel(unitText, widget);
+            unit->setFont(labelFont);
+            unit->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+        }
+
+        layout->addWidget(label, row, 0);
+        layout->addWidget(value, row, 1);
+        if (unit)
+            layout->addWidget(unit, row, 2);
+
+        *valueLabelPtr = value;
+        ++row;
+    };
+
+    makeRow("Speed",   &this->speedLabel,   "km/h");
+    makeRow("RPM",     &this->rpmLabel,     "");
+    makeRow("Gear",    &this->gearLabel,    "");
+    makeRow("Coolant", &this->coolantLabel, "°C");
+    makeRow("Odo",     &this->odoLabel,     "km");
+    makeRow("Fuel",    &this->fuelLabel,    "%");
+
+    layout->setColumnStretch(0, 0);
+    layout->setColumnStretch(1, 1);
+    layout->setColumnStretch(2, 0);
+
     return widget;
 }
