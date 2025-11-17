@@ -112,12 +112,19 @@ VehiclePage::VehiclePage(Arbiter &arbiter, QWidget *parent)
     : QTabWidget(parent)
     , Page(arbiter, "Vehicle", "motocycle", true, this)
 {
+    // Accept touch events for gesture recognition
+    this->setAttribute(Qt::WA_AcceptTouchEvents, true);
+    // Register swipe gesture on this tab widget
+    this->grabGesture(Qt::SwipeGesture);
+
 }
 
 void VehiclePage::init()
 {
-    this->addTab(new DataTab(this->arbiter, this), "Odometer");
-        this->config = Config::get_instance();
+    auto *dataTab = new DataTab(this->arbiter, this);
+    dataTab->installEventFilter(this);
+    this->addTab(dataTab, "Data");    
+    this->config = Config::get_instance();
  
     for (auto device : QCanBus::instance()->availableDevices("socketcan"))
         this->can_devices.append(device.name());
@@ -322,12 +329,15 @@ void VehiclePage::load_plugin()
                     plugin->init((ICANBus *)SocketCANBus::get_instance());
                     break;
             }
-            for (QWidget *tab : plugin->widgets())
+            for (QWidget *tab : plugin->widgets()) {
+                tab->installEventFilter(this);           // swipe detection
                 this->addTab(tab, tab->objectName());
+            }
         }
     }
     this->config->set_vehicle_plugin(key);
 }
+
 
 DataTab::DataTab(Arbiter &arbiter, QWidget *parent)
     : QWidget(parent)
@@ -433,7 +443,6 @@ DataTab::DataTab(Arbiter &arbiter, QWidget *parent)
     // der Fehler-Handler startet den Reconnect-Timer
 }
 
-
 QWidget *DataTab::speedo_tach_widget()
 {
     QWidget *widget = new QWidget(this);
@@ -472,7 +481,6 @@ QWidget *DataTab::speedo_tach_widget()
 
     return widget;
 }
-
 
 QWidget *DataTab::engine_data_widget()
 {
@@ -604,4 +612,85 @@ QWidget *DataTab::vehicle_data_widget()
     layout->setColumnStretch(2, 0);
 
     return widget;
+}
+
+bool VehiclePage::eventFilter(QObject *watched, QEvent *event)
+{
+    // Only care about events on tab pages (QWidget children of this)
+    QWidget *w = qobject_cast<QWidget *>(watched);
+    if (!w)
+        return QTabWidget::eventFilter(watched, event);
+
+    // Mouse press: remember start position and start timer
+    if (event->type() == QEvent::MouseButtonPress) {
+        QMouseEvent *me = static_cast<QMouseEvent *>(event);
+        if (me->button() == Qt::LeftButton) {
+            swipeActive = true;
+            swipeStartPos = me->pos();
+            swipeTimer.start();
+            // qDebug() << "[VehiclePage] swipe start at" << swipeStartPos;
+        }
+        return false; // do not eat the event
+    }
+
+    // Mouse move: optional, we just keep state
+    if (event->type() == QEvent::MouseMove) {
+        // could update last position if needed
+        return false;
+    }
+
+    // Mouse release: check if this looks like a swipe
+    if (event->type() == QEvent::MouseButtonRelease) {
+        QMouseEvent *me = static_cast<QMouseEvent *>(event);
+        if (!swipeActive) {
+            return false;
+        }
+
+        swipeActive = false;
+
+        QPoint endPos = me->pos();
+        int dt = swipeTimer.elapsed();
+        QPoint delta = endPos - swipeStartPos;
+
+        // qDebug() << "[VehiclePage] swipe end at" << endPos
+        //          << "delta =" << delta << "dt =" << dt;
+
+        int dx = delta.x();
+        int dy = delta.y();
+
+        // Thresholds: adjust if needed
+        const int minDistance = 100;      // minimum horizontal movement in pixels
+        const int maxOffAxis = 100;       // max vertical movement in pixels
+        const int maxDurationMs = 700;   // must be relatively quick
+
+        if (dt > maxDurationMs)
+            return false;
+
+        if (std::abs(dx) < minDistance)
+            return false;
+
+        if (std::abs(dy) > maxOffAxis)
+            return false;
+
+        int idx = this->currentIndex();
+        int count = this->count();
+        if (count <= 1)
+            return false;
+
+        if (dx < 0) {
+            // Swipe left: go to next tab
+            int newIndex = (idx + 1) % count;
+            // qDebug() << "[VehiclePage] swipe left -> tab" << newIndex;
+            this->setCurrentIndex(newIndex);
+            return true;    // consume event
+        } else {
+            // Swipe right: go to previous tab
+            int newIndex = (idx - 1 + count) % count;
+            // qDebug() << "[VehiclePage] swipe right -> tab" << newIndex;
+            this->setCurrentIndex(newIndex);
+            return true;    // consume event
+        }
+    }
+
+    return QTabWidget::eventFilter(watched, event);
 }

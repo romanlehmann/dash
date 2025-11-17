@@ -17,6 +17,9 @@
 #include <QByteArray>
 #include <QLabel>
 #include <QTimer>
+#include <QMouseEvent>
+#include <QElapsedTimer>
+
 
 
 class Arbiter;
@@ -59,6 +62,10 @@ class VehiclePage : public QTabWidget, public Page {
 
    public:
     VehiclePage(Arbiter &arbiter, QWidget *parent = nullptr);
+  
+   protected:
+     // New: swipe detection via event filter
+    bool eventFilter(QObject *watched, QEvent *event) override;
 
     void init() override;
 
@@ -77,6 +84,11 @@ class VehiclePage : public QTabWidget, public Page {
     QPluginLoader *active_plugin;
     Selector *plugin_selector;
     Config *config;
+    // Swipe state
+    QPoint swipeStartPos;
+    bool swipeActive = false;
+    QElapsedTimer swipeTimer;
+
 };
 
 class DataTab : public QWidget {
