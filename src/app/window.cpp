@@ -174,20 +174,20 @@ QWidget *Dash::control_bar() const
 
     layout->addStretch();
 
-    auto dialog = new Dialog(this->arbiter, true, this->arbiter.window());
-    dialog->set_title("Power Off");
-    dialog->set_body(this->power_control());
-    auto shutdown = new QPushButton();
-    shutdown->setFlat(true);
-    this->arbiter.forge().iconize("power_settings_new", shutdown, 26);
-    layout->addWidget(shutdown);
-    connect(shutdown, &QPushButton::clicked, [dialog]{ dialog->open(); });
-
-    auto exit = new QPushButton();
-    exit->setFlat(true);
-    this->arbiter.forge().iconize("close", exit, 26);
-    layout->addWidget(exit);
-    connect(exit, &QPushButton::clicked, []{ qApp->exit(); });
+    //auto dialog = new Dialog(this->arbiter, true, this->arbiter.window());
+    //dialog->set_title("Power Off");
+    //dialog->set_body(this->power_control());
+    //auto shutdown = new QPushButton();
+    //shutdown->setFlat(true);
+    //this->arbiter.forge().iconize("power_settings_new", shutdown, 26);
+    //layout->addWidget(shutdown);
+    //connect(shutdown, &QPushButton::clicked, [dialog]{ dialog->open(); });
+//
+    //auto exit = new QPushButton();
+    //exit->setFlat(true);
+    //this->arbiter.forge().iconize("close", exit, 26);
+    //layout->addWidget(exit);
+    //connect(exit, &QPushButton::clicked, []{ qApp->exit(); });
 
     widget->setVisible(this->arbiter.layout().control_bar.enabled);
     connect(&this->arbiter, &Arbiter::control_bar_changed, [widget](bool enabled){
