@@ -310,3 +310,30 @@ QDialog > QFrame {
     background-color: rgba(255, 255, 255, 31);
     border-radius: 8px;
 }
+
+/* Speed / RPM / Gear */
+#speedBlock {
+    border-radius: 20px;
+    padding: 10px 20px;
+    background-color: #303030;
+}
+
+#rpmBlock {
+    border-radius: 16px;
+    padding: 8px 16px;
+    background-color: #303030;
+}
+
+#gearBlock {
+    border-radius: 16px;
+    padding: 6px 12px;
+    background-color: #303030;
+}
+
+/* Info-Kacheln */
+#coolantBox,
+#odoBox,
+#fuelBox {
+    border-radius: 10px;
+    background-color: #303030;
+}

@@ -5,7 +5,48 @@
 #include <QFrame>
 
 #include "bike.hpp"
-#include "app/widgets/vehicle.hpp"
+//#include "app/widgets/vehicle.hpp"
+#include <QPixmap>
+#include <QResizeEvent>
+
+namespace {
+class BikeImageLabel : public QLabel
+{
+public:
+    explicit BikeImageLabel(QWidget *parent = nullptr)
+        : QLabel(parent)
+    {
+        setAlignment(Qt::AlignCenter);
+        setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    }
+
+    void setSourcePixmap(const QPixmap &pix)
+    {
+        m_pix = pix;
+        updateScaled();
+    }
+
+protected:
+    void resizeEvent(QResizeEvent *event) override
+    {
+        QLabel::resizeEvent(event);
+        updateScaled();
+    }
+
+private:
+    QPixmap m_pix;
+
+    void updateScaled()
+    {
+        if (m_pix.isNull())
+            return;
+
+        setPixmap(m_pix.scaled(size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    }
+};
+
+} // namespace
+
 
 // Simple tab widget that shows a bike-style vehicle view
 // with hard-coded status values.
@@ -19,41 +60,22 @@ public:
         QVBoxLayout *root = new QVBoxLayout(this);
         root->setContentsMargins(24, 24, 24, 24);
         root->setSpacing(18);
+    //
+    // Bike image visualization
+    //
+    BikeImageLabel *bikeImage = new BikeImageLabel(this);
+    bikeImage->setObjectName("BikeImage");
 
-        //
-        // Vehicle visualization
-        //
-        Vehicle *vehicle = new Vehicle(arbiter, this);
+    QPixmap pix(":/graphics/vehicle/Yamaha_bg.png");
+    if (pix.isNull()) {
+        qWarning() << "Failed to load :/graphics/vehicle/Yamaha_bg.png";
+    } else {
+        bikeImage->setSourcePixmap(pix);
+    }
 
-        // Configure the vehicle widget to loosely represent a bike.
-        // The Vehicle widget is car-oriented (four wheels), so we map
-        // the motorcycle's two tires onto both left/right positions.
-        vehicle->disable_sensors();                 // keep the view clean
+    root->addWidget(bikeImage, /*stretch*/ 2);
 
-        // Use PSI for consistency with the test plugin
-        vehicle->pressure_init("psi", 34);         // unit + warning threshold
 
-        // Hard-coded motorcycle tire pressures (example values)
-        const uint8_t frontPsi = 36;               // front tire ~2.5 bar
-        const uint8_t rearPsi  = 42;               // rear tire ~2.9 bar
-
-        // Front wheel -> both front positions
-        vehicle->pressure(Position::FRONT_LEFT,  frontPsi);
-        vehicle->pressure(Position::FRONT_RIGHT, frontPsi);
-
-        // Rear wheel -> both rear positions
-        vehicle->pressure(Position::BACK_LEFT,   rearPsi);
-        vehicle->pressure(Position::BACK_RIGHT,  rearPsi);
-
-        // Lights and basic appearance
-        vehicle->headlights(true);
-        vehicle->taillights(true);
-        vehicle->indicators(Position::LEFT, false);
-        vehicle->indicators(Position::RIGHT, false);
-        vehicle->hazards(false);
-        vehicle->wheel_steer(0);
-
-        root->addWidget(vehicle, /*stretch*/ 2);
 
         //
         // Info panel below the vehicle
@@ -72,6 +94,7 @@ public:
             QFont labelFont = labelWidget->font();
             labelFont.setWeight(QFont::Light);
             labelWidget->setFont(labelFont);
+            labelFont.setPointSize(24);          // Label-Schriftgröße
             labelWidget->setAlignment(
                 Qt::AlignLeft | Qt::AlignVCenter);
 
@@ -79,6 +102,7 @@ public:
             QFont valueFont = valueWidget->font();
             valueFont.setBold(true);
             valueWidget->setFont(valueFont);
+            valueFont.setPointSize(24);          // Wert-Schriftgröße
             valueWidget->setAlignment(
                 Qt::AlignRight | Qt::AlignVCenter);
 
@@ -91,7 +115,7 @@ public:
         addRow(row++, tr("Front tire"),   tr("36 psi / 32 °C"));
         addRow(row++, tr("Rear tire"),    tr("42 psi / 34 °C"));
         addRow(row++, tr("Battery"),      tr("12.6 V  /  92 %"));
-        addRow(row++, tr("Lighting"),     tr("Low beam, tail, DRL"));
+        addRow(row++, tr("Lighting"),     tr("Low beam, tail"));
         addRow(row++, tr("Indicators"),   tr("Off"));
         addRow(row++, tr("Riding mode"),  tr("Sport"));
 

@@ -123,7 +123,7 @@ void VehiclePage::init()
 {
     auto *dataTab = new DataTab(this->arbiter, this);
     dataTab->installEventFilter(this);
-    this->addTab(dataTab, "Data");    
+    this->addTab(dataTab, "Speedometer");    
     this->config = Config::get_instance();
  
     for (auto device : QCanBus::instance()->availableDevices("socketcan"))
@@ -562,57 +562,169 @@ QWidget *DataTab::engine_load_widget()
 QWidget *DataTab::vehicle_data_widget()
 {
     QWidget *widget = new QWidget(this);
-    QGridLayout *layout = new QGridLayout(widget);
-    layout->setContentsMargins(10, 10, 10, 10);
-    layout->setHorizontalSpacing(20);
-    layout->setVerticalSpacing(8);
 
-    QFont valueFont = this->arbiter.forge().font(24, true);
-    QFont labelFont = this->arbiter.forge().font(10);
-    labelFont.setWeight(QFont::Light);
+    QVBoxLayout *root = new QVBoxLayout(widget);
+    root->setContentsMargins(20, 20, 20, 20);
+    root->setSpacing(15);
 
-    int row = 0;
+    //
+    // 1) Obere Zeile: Speed (zentriert, groß) + RPM rechts daneben
+    //
+    QWidget *topRow = new QWidget(widget);
+    QHBoxLayout *topLayout = new QHBoxLayout(topRow);
+    topLayout->setContentsMargins(0, 0, 0, 0);
+    topLayout->setSpacing(30);
 
-    auto makeRow = [&](const QString &labelText,
-                       QLabel **valueLabelPtr,
-                       const QString &unitText) {
-        QLabel *label = new QLabel(labelText, widget);
-        label->setFont(labelFont);
-        label->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    // Speed-Block
+    QWidget *speedBlock = new QWidget(topRow);
+    speedBlock->setObjectName("speedBlock");
 
-        QLabel *value = new QLabel("-", widget);
-        value->setFont(valueFont);
-        value->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    QVBoxLayout *speedLayout = new QVBoxLayout(speedBlock);
+    speedLayout->setContentsMargins(10, 10, 10, 10);
+    speedLayout->setSpacing(0);
+    speedLayout->setAlignment(Qt::AlignHCenter | Qt::AlignVCenter);
 
-        QLabel *unit = nullptr;
-        if (!unitText.isEmpty()) {
-            unit = new QLabel(unitText, widget);
-            unit->setFont(labelFont);
-            unit->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-        }
+    QFont speedValueFont = this->arbiter.forge().font(64, true);
+    QFont speedUnitFont  = this->arbiter.forge().font(14);
+    speedUnitFont.setWeight(QFont::Light);
 
-        layout->addWidget(label, row, 0);
-        layout->addWidget(value, row, 1);
-        if (unit)
-            layout->addWidget(unit, row, 2);
+    this->speedLabel = new QLabel("-", speedBlock);
+    this->speedLabel->setFont(speedValueFont);
+    this->speedLabel->setAlignment(Qt::AlignHCenter | Qt::AlignVCenter);
 
-        *valueLabelPtr = value;
-        ++row;
+    QLabel *speedUnitLabel = new QLabel("km/h", speedBlock);
+    speedUnitLabel->setFont(speedUnitFont);
+    speedUnitLabel->setAlignment(Qt::AlignHCenter | Qt::AlignVCenter);
+
+    speedLayout->addWidget(this->speedLabel);
+    speedLayout->addWidget(speedUnitLabel);
+
+    // RPM-Block
+    QWidget *rpmBlock = new QWidget(topRow);
+    rpmBlock->setObjectName("rpmBlock");
+
+    QVBoxLayout *rpmLayout = new QVBoxLayout(rpmBlock);
+    rpmLayout->setContentsMargins(8, 8, 8, 8);
+    rpmLayout->setSpacing(0);
+    rpmLayout->setAlignment(Qt::AlignHCenter | Qt::AlignVCenter);
+
+    QFont rpmValueFont = this->arbiter.forge().font(64, true);
+    QFont rpmUnitFont  = this->arbiter.forge().font(14);
+    rpmUnitFont.setWeight(QFont::Light);
+
+    this->rpmLabel = new QLabel("-", rpmBlock);
+    this->rpmLabel->setFont(rpmValueFont);
+    this->rpmLabel->setAlignment(Qt::AlignHCenter | Qt::AlignVCenter);
+
+    QLabel *rpmUnitLabel = new QLabel("RPM", rpmBlock);
+    rpmUnitLabel->setFont(rpmUnitFont);
+    rpmUnitLabel->setAlignment(Qt::AlignHCenter | Qt::AlignVCenter);
+
+    rpmLayout->addWidget(this->rpmLabel);
+    rpmLayout->addWidget(rpmUnitLabel);
+
+    // SizePolicy, damit sie auch wirklich gleichmäßig ziehen
+    speedBlock->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    rpmBlock->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+
+    // Anordnung oben: zwei gleich große Blöcke
+    topLayout->addWidget(speedBlock, 1);  // stretch = 1
+    topLayout->addWidget(rpmBlock,  1);   // stretch = 1
+
+
+    root->addWidget(topRow);
+
+
+    //
+    // 2) Mittlere Zeile: Gear
+    //
+    QWidget *middleRow = new QWidget(widget);
+    middleRow->setObjectName("gearBlock");
+
+    QVBoxLayout *middleLayout = new QVBoxLayout(middleRow);
+    middleLayout->setContentsMargins(8, 8, 8, 8);
+    middleLayout->setSpacing(5);
+
+    QFont gearValueFont = this->arbiter.forge().font(42, true);
+    QFont gearLabelFont = this->arbiter.forge().font(14);
+    gearLabelFont.setWeight(QFont::Light);
+
+    this->gearLabel = new QLabel("-", middleRow);
+    this->gearLabel->setFont(gearValueFont);
+    this->gearLabel->setAlignment(Qt::AlignHCenter | Qt::AlignVCenter);
+
+    QLabel *gearTextLabel = new QLabel("GEAR", middleRow);
+    gearTextLabel->setFont(gearLabelFont);
+    gearTextLabel->setAlignment(Qt::AlignHCenter | Qt::AlignVCenter);
+
+    middleLayout->addWidget(this->gearLabel);
+    middleLayout->addWidget(gearTextLabel);
+
+    root->addWidget(middleRow);
+
+
+    //
+    // 3) Untere Zeile: Info-Kacheln (Coolant, Odo, Fuel)
+    //
+    QWidget *bottomRow = new QWidget(widget);
+    QHBoxLayout *bottomLayout = new QHBoxLayout(bottomRow);
+    bottomLayout->setContentsMargins(0, 0, 0, 0);
+    bottomLayout->setSpacing(10);
+
+    auto makeInfoBox = [&](const QString &title,
+                           QLabel **valuePtr,
+                           const QString &unitText,
+                           const char *objectName) -> QWidget *
+    {
+        QWidget *box = new QWidget(bottomRow);
+        box->setObjectName(objectName);
+
+        QVBoxLayout *boxLayout = new QVBoxLayout(box);
+        boxLayout->setContentsMargins(8, 8, 8, 8);
+        boxLayout->setSpacing(2);
+
+        QFont smallValueFont = this->arbiter.forge().font(24, true);
+        QFont smallLabelFont = this->arbiter.forge().font(14);
+        smallLabelFont.setWeight(QFont::Light);
+
+        QLabel *value = new QLabel("-", box);
+        value->setFont(smallValueFont);
+        value->setAlignment(Qt::AlignHCenter | Qt::AlignVCenter);
+
+        QString labelText = title;
+        if (!unitText.isEmpty())
+            labelText += " [" + unitText + "]";
+
+        QLabel *label = new QLabel(labelText, box);
+        label->setFont(smallLabelFont);
+        label->setAlignment(Qt::AlignHCenter | Qt::AlignVCenter);
+
+        boxLayout->addWidget(value);
+        boxLayout->addWidget(label);
+
+        *valuePtr = value;
+        return box;
     };
 
-    makeRow("Speed",   &this->speedLabel,   "km/h");
-    makeRow("RPM",     &this->rpmLabel,     "");
-    makeRow("Gear",    &this->gearLabel,    "");
-    makeRow("Coolant", &this->coolantLabel, "°C");
-    makeRow("Odo",     &this->odoLabel,     "km");
-    makeRow("Fuel",    &this->fuelLabel,    "%");
+    QWidget *coolantBox = makeInfoBox("Coolant", &this->coolantLabel, "°C", "coolantBox");
+    QWidget *odoBox     = makeInfoBox("Odometer",     &this->odoLabel,     "km", "odoBox");
+    QWidget *fuelBox    = makeInfoBox("Fuel",    &this->fuelLabel,    "%",  "fuelBox");
 
-    layout->setColumnStretch(0, 0);
-    layout->setColumnStretch(1, 1);
-    layout->setColumnStretch(2, 0);
+    bottomLayout->addWidget(coolantBox);
+    bottomLayout->addWidget(odoBox);
+    bottomLayout->addWidget(fuelBox);
+
+    root->addWidget(bottomRow);
+
+    // Verhältnis der Zeilen
+    root->setStretchFactor(topRow,    3);
+    root->setStretchFactor(middleRow, 2);
+    root->setStretchFactor(bottomRow, 2);
 
     return widget;
 }
+
+
 
 bool VehiclePage::eventFilter(QObject *watched, QEvent *event)
 {
