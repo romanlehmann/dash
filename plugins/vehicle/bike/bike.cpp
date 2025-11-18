@@ -116,7 +116,7 @@ public:
        //                        << "Yamaha_2.png"
        //                        << "Yamaha_3.png");
 
-       bikeImage->setImageList(QStringList() << "Yamaha_3.png");
+       bikeImage->setImageList(QStringList() << "Yamaha_1.png");
 
 
         // Bild bekommt mehr Platz
@@ -196,8 +196,6 @@ public:
 
     }
 };
-
-
 
 // ------------------- Bike plugin implementation -------------------
 

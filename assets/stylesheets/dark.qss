@@ -337,3 +337,10 @@ QDialog > QFrame {
     border-radius: 10px;
     background-color: #303030;
 }
+
+#infoBox QLabel[infoRow="true"] {
+    border-radius: 10px;
+    background-color: #303030;
+    border-bottom: 1px solid #333333;
+    padding: 4px 0;
+}

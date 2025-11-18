@@ -335,3 +335,13 @@ QDialog > QFrame {
     border-radius: 10px;
     background-color: #ffffff;
 }
+
+#infoBox QLabel[infoRow="true"] {
+    border-radius: 10px;
+    background-color: #ffffff;
+    border-bottom: 1px solid #dcdcdc;
+    padding: 4px 0;
+}
+#infoBox QLabel[infoRow="true"]:last-child {
+    border-bottom: none;
+}
