@@ -53,14 +53,133 @@ Dash::Dash(Arbiter &arbiter)
     layout->addLayout(this->rail.layout);
     layout->addLayout(this->body.layout);
 
-    connect(&this->rail.group, QOverload<int>::of(&QButtonGroup::buttonPressed), [this](int id){
-        this->arbiter.set_curr_page(id);
+    // --------------------------------------
+    // Long-press configuration for Settings
+    // --------------------------------------
+    const int settingsHoldMs = 5000;  // 5 seconds
+
+    // Hint label in the status bar
+    auto settingsHint = new QLabel(this);
+    settingsHint->setAlignment(Qt::AlignCenter);
+    settingsHint->setWordWrap(true);
+    settingsHint->setVisible(false);
+    settingsHint->setFont(this->arbiter.forge().font(12, true));
+
+    // Attach hint label to the status bar (top area in the dash body)
+    this->body.status_bar->addWidget(settingsHint);
+
+    // Timer to periodically update the countdown text
+    auto settingsHintTimer = new QTimer(this);
+    settingsHintTimer->setInterval(200); // update every 200 ms
+
+    QObject::connect(settingsHintTimer, &QTimer::timeout,
+                     [this, settingsHint, settingsHoldMs]()
+    {
+        if (!settingsHint->isVisible())
+            return;
+
+        qint64 elapsed = this->rail.timer.elapsed();
+        int remainingMs = settingsHoldMs - static_cast<int>(elapsed);
+        if (remainingMs < 0)
+            remainingMs = 0;
+
+        int remainingSec = (remainingMs + 999) / 1000; // round up to seconds
+
+        QString text;
+        if (remainingSec > 0) {
+            text = tr("Keep holding for %1 s to open Settings").arg(remainingSec);
+        } else {
+            text = tr("Release now to open Settings");
+        }
+
+        settingsHint->setText(text);
+    });
+
+    // --------------------------------------
+    // NavRail: button pressed
+    // --------------------------------------
+    connect(&this->rail.group,
+            QOverload<int>::of(&QButtonGroup::buttonPressed),
+            [this, settingsHint, settingsHintTimer, settingsHoldMs](int id)
+    {
+        // Start time measurement for long-press
         this->rail.timer.start();
+
+        // Find the page that belongs to this button id
+        Page *page = nullptr;
+        for (auto p : this->arbiter.layout().pages()) {
+            if (this->arbiter.layout().page_id(p) == id) {
+                page = p;
+                break;
+            }
+        }
+        if (!page)
+            return;
+
+        if (page->icon_name() == "tune") {
+            // SETTINGS: enable long-press handling
+            // Show hint and start countdown timer
+            settingsHint->setVisible(true);
+
+            int remainingSec = settingsHoldMs / 1000;
+            settingsHint->setText(
+                tr("Keep holding for %1 s to open Settings").arg(remainingSec));
+
+            settingsHintTimer->start();
+        } else {
+            // ALL OTHER PAGES: keep original behavior
+            settingsHintTimer->stop();
+            settingsHint->setVisible(false);
+
+            this->arbiter.set_curr_page(id);
+        }
     });
-    connect(&this->rail.group, QOverload<int>::of(&QButtonGroup::buttonReleased), [this](int id){
-        if (this->rail.timer.hasExpired(1000))
-            this->arbiter.set_fullscreen(true);
+
+    // --------------------------------------
+    // NavRail: button released
+    // --------------------------------------
+    connect(&this->rail.group,
+            QOverload<int>::of(&QButtonGroup::buttonReleased),
+            [this, settingsHint, settingsHintTimer, settingsHoldMs](int id)
+    {
+        // Find the page that belongs to this button id
+        Page *page = nullptr;
+        for (auto p : this->arbiter.layout().pages()) {
+            if (this->arbiter.layout().page_id(p) == id) {
+                page = p;
+                break;
+            }
+        }
+        if (!page)
+            return;
+
+        if (page->icon_name() == "tune") {
+            // SETTINGS button released
+            settingsHintTimer->stop();
+            settingsHint->setVisible(false);
+
+            qint64 elapsed = this->rail.timer.elapsed();
+            if (elapsed >= settingsHoldMs) {
+                // Long-press was long enough -> switch to Settings page
+                this->arbiter.set_curr_page(id);
+            } else {
+                // Press was too short -> revert to current page
+                auto currentPage = this->arbiter.layout().curr_page;
+                int currentId = this->arbiter.layout().page_id(currentPage);
+                if (auto currentButton = this->rail.group.button(currentId)) {
+                    currentButton->setChecked(true);
+                }
+            }
+        } else {
+            // OTHER PAGES: keep fullscreen behavior (after > 1 s)
+            if (this->rail.timer.hasExpired(1000))
+                this->arbiter.set_fullscreen(true);
+        }
     });
+
+    // --------------------------------------
+    // Rest unchanged
+    // --------------------------------------
     connect(&this->arbiter, &Arbiter::curr_page_changed, [this](Page *page){
         this->set_page(page);
     });
@@ -72,6 +191,9 @@ Dash::Dash(Arbiter &arbiter)
             this->arbiter.set_curr_page(this->arbiter.layout().next_enabled_page(page));
     });
 }
+
+
+
 
 void Dash::init()
 {
