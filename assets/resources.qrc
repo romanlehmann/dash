@@ -58,5 +58,6 @@
         <file>fonts/Montserrat/Montserrat-Regular.ttf</file>
         <file>graphics/vehicle/car.svg</file>
         <file>graphics/vehicle/Yamaha_1.png</file>
+        <file>icons/cast_dark.svg</file>
     </qresource>
 </RCC>

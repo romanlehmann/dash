@@ -17,6 +17,7 @@
 #include "app/pages/launcher.hpp"
 #include "app/pages/media.hpp"
 #include "app/pages/settings.hpp"
+#include "app/pages/rear_seat.hpp"
 #include "app/quick_views/combo.hpp"
 #include "app/utilities/icon_engine.hpp"
 #include "plugins/brightness_plugin.hpp"
@@ -123,6 +124,7 @@ Session::Layout::Layout(QSettings &settings, Arbiter &arbiter)
         new VehiclePage(arbiter),
         new CameraPage(arbiter),
         new LauncherPage(arbiter),
+        new RearSeatPage(arbiter),
         new SettingsPage(arbiter)
     };
 

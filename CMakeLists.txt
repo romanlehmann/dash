@@ -47,7 +47,6 @@ set(TAGLIB_LIBRARIES ${TAGLIB_LIBRARIES})
 
 message(STATUS "Found Taglib via pkg-config: ${TAGLIB_LIBRARIES}")
 find_package(aasdk REQUIRED)
-find_package(openauto REQUIRED)
 
 if(RPI_BUILD AND NOT GST_BUILD)
     add_definitions(-DUSE_OMX -DOMX_SKIP64BIT)
@@ -95,6 +94,10 @@ include(${base_directory}/cmake_modules/gitversion.cmake)
 target_include_directories(dash PRIVATE
     ${CMAKE_CURRENT_BINARY_DIR}
     )
+
+# include QZXing headers
+include_directories(${CMAKE_SYSROOT}/usr/include)
+link_directories(${CMAKE_SYSROOT}/usr/lib)
 
 target_include_directories(dash SYSTEM PRIVATE
     ${Qt5Svg_INCLUDE_DIRS}
@@ -156,6 +159,7 @@ target_link_libraries(dash
     ${QTGSTREAMER_QUICK_LIBRARY}
     ${TAGLIB_LIBRARIES}
     Qt5::Network
+    QZXing
     )
 
 install(TARGETS dash DESTINATION bin)
