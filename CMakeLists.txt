@@ -84,10 +84,16 @@ message(INFO "${GST_LIBRARIES}")
 link_directories(${CMAKE_LIBRARY_OUTPUT_DIRECTORY})
 
 file(GLOB_RECURSE source_files ${sources_directory}/*.cpp ${include_directory}/*.hpp ${resources_directory}/*.qrc)
+file(GLOB_RECURSE hotspotd_sources ${sources_directory}/services/hotspotd/*.cpp)
+list(REMOVE_ITEM source_files ${hotspotd_sources})
 
 add_subdirectory(plugins)
 
 add_executable(dash ${source_files})
+if (hotspotd_sources)
+    add_executable(opendash-hotspotd ${hotspotd_sources})
+    target_include_directories(opendash-hotspotd PRIVATE ${include_directory})
+endif()
 
 include(${base_directory}/cmake_modules/gitversion.cmake)
 
@@ -163,3 +169,6 @@ target_link_libraries(dash
     )
 
 install(TARGETS dash DESTINATION bin)
+if (TARGET opendash-hotspotd)
+    install(TARGETS opendash-hotspotd DESTINATION bin)
+endif()

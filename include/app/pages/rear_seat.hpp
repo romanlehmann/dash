@@ -5,6 +5,8 @@
 #include <QPushButton>
 #include <QFrame>
 #include <QImage>
+#include <QShowEvent>
+#include <QTimer>
 #include "app/pages/page.hpp"
 
 #include <QString>
@@ -12,6 +14,8 @@
 
 #define ENABLE_ENCODER_GENERIC
 #include <QZXing.h>  // Include the QZXing library
+#include "app/services/hostapd_config.hpp"
+#include "app/services/hotspot_client.hpp"
 
 #ifndef ENABLE_ENCODER_GENERIC
 #error "ENABLE_ENCODER_GENERIC is NOT defined"
@@ -32,6 +36,9 @@ public:
     explicit RearSeatPage(Arbiter &arbiter, QWidget *parent = nullptr);
     void init() override;
 
+protected:
+    void showEvent(QShowEvent *event) override;
+
 private:
     // ===== UI Elements =====
     QLabel *titleLabel;       // Page title
@@ -44,13 +51,17 @@ private:
     QLabel *qrHintLabel;
     QLabel *instrBody;
     QWidget *instructionContainer; // We group the instructions to hide/show them easily
+    QTimer *hotspotRefreshTimer = nullptr;
 
-    bool hotspotEnabled = false; // Hotspot dummy state
+    bool hotspotEnabled = false; // Hotspot state
+    bool hotspotStatusOk = false;
+    QString hotspotError;
 
     // ===== WiFi Credentials =====
-    QString wifiSsid = "Pioneer-Europe";
-    QString wifiPassword = "xDCsd*MUhhsFmQu4LpYP";
-    QString wifiEncryption = "WPA"; // WPA/WPA2
+    QString wifiSsid;
+    QString wifiPassword;
+    QString wifiEncryption;
+    QString hostapdConfigPath = "/etc/hostapd.conf";
 
     // ===== UI & QR Code Methods =====
     void updateHotspotUi();
@@ -58,11 +69,21 @@ private:
     void updateQrCode();
     QImage prepareQrForDisplay(const QImage &qr);
     QSize calculateQrSize() const;
+    void loadHostapdConfig();
+    void refreshHotspotStatus();
+    bool hasValidHotspotConfig() const;
+    bool desiredHotspotEnabled() const;
+    void setDesiredHotspotEnabled(bool enabled);
+    void applyDesiredHotspotState();
 
 private slots:
     void onToggleHotspotClicked();
     QString createWifiQrPayload() const;
     QImage generateWifiQrImage(const QString &payload);
+
+private:
+    HostapdConfig hostapdConfig;
+    HotspotClient hotspotClient;
 };
 
 /**

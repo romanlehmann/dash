@@ -1,0 +1,17 @@
+[Unit]
+Description=OpenDash Hotspot Network Setup
+After=network.target
+Before=hostapd.service
+PartOf=hostapd.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/opendash/hotspot-setup.sh
+ExecStop=/usr/lib/opendash/hotspot-teardown.sh
+RemainAfterExit=yes
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

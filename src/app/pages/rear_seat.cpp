@@ -3,6 +3,11 @@
 #include <QHBoxLayout> // Required for the split layout
 #include <QPainter>
 #include <QFont>
+#include <QSettings>
+
+namespace {
+const char *kHotspotEnabledKey = "Pages/RearSeat/hotspot_enabled";
+}
 
 /**
  * Constructor
@@ -12,6 +17,7 @@
 RearSeatPage::RearSeatPage(Arbiter &arbiter, QWidget *parent)
     : QWidget(parent)
     , Page(arbiter, "Rear Seat", "cast_dark", true, this)
+    , hotspotClient(this)
 {
 }
 
@@ -141,19 +147,125 @@ void RearSeatPage::init()
     mainLayout->addWidget(toggleButton);
 
     // --- Initialize UI State ---
+    loadHostapdConfig();
+    refreshHotspotStatus();
+    applyDesiredHotspotState();
     updateWifiLabels();
-    updateQrCode();
     updateHotspotUi();
+
+    hotspotRefreshTimer = new QTimer(this);
+    hotspotRefreshTimer->setInterval(1000);
+    connect(hotspotRefreshTimer, &QTimer::timeout, this, [this]{
+        refreshHotspotStatus();
+        applyDesiredHotspotState();
+        updateHotspotUi();
+
+        if (hotspotStatusOk && (hotspotEnabled == desiredHotspotEnabled()))
+            hotspotRefreshTimer->stop();
+    });
+    hotspotRefreshTimer->start();
+}
+
+void RearSeatPage::showEvent(QShowEvent *event)
+{
+    QWidget::showEvent(event);
+    refreshHotspotStatus();
+    updateHotspotUi();
+    if (hotspotRefreshTimer && !hotspotRefreshTimer->isActive())
+        hotspotRefreshTimer->start();
 }
 
 /**
  * Toggle button pressed
- * Switches hotspot on/off (UI-only)
+ * Switches hotspot on/off via the hotspot service
  */
 void RearSeatPage::onToggleHotspotClicked()
 {
-    hotspotEnabled = !hotspotEnabled;
+    const bool requestedEnable = !hotspotEnabled;
+    setDesiredHotspotEnabled(requestedEnable);
+
+    HotspotClient::Status status = requestedEnable ? hotspotClient.start() : hotspotClient.stop();
+    if (status.ok) {
+        hotspotStatusOk = true;
+        hotspotError.clear();
+        hotspotEnabled = status.isActive();
+    } else {
+        hotspotError = status.error;
+        refreshHotspotStatus();
+    }
     updateHotspotUi();
+}
+
+void RearSeatPage::loadHostapdConfig()
+{
+    hostapdConfig = HostapdConfigReader::load(hostapdConfigPath, nullptr);
+    wifiSsid = hostapdConfig.ssid;
+    wifiPassword = hostapdConfig.passphrase;
+    wifiEncryption = hostapdConfig.encryption;
+    if (wifiEncryption.isEmpty())
+        wifiEncryption = "WPA";
+}
+
+void RearSeatPage::refreshHotspotStatus()
+{
+    HotspotClient::Status status = hotspotClient.status();
+    hotspotStatusOk = status.ok;
+    if (status.ok) {
+        hotspotEnabled = status.isActive();
+        hotspotError.clear();
+    } else {
+        hotspotEnabled = false;
+        hotspotError = status.error;
+    }
+}
+
+bool RearSeatPage::hasValidHotspotConfig() const
+{
+    return hostapdConfig.hasCredentials();
+}
+
+bool RearSeatPage::desiredHotspotEnabled() const
+{
+    QSettings settings;
+    return settings.value(kHotspotEnabledKey, false).toBool();
+}
+
+void RearSeatPage::setDesiredHotspotEnabled(bool enabled)
+{
+    QSettings settings;
+    settings.setValue(kHotspotEnabledKey, enabled);
+}
+
+void RearSeatPage::applyDesiredHotspotState()
+{
+    const bool desired = desiredHotspotEnabled();
+    if (!hotspotStatusOk)
+        return;
+
+    if (desired && !hotspotEnabled) {
+        HotspotClient::Status status = hotspotClient.start();
+        if (status.ok) {
+            hotspotStatusOk = true;
+            hotspotError.clear();
+            hotspotEnabled = status.isActive();
+        } else {
+            hotspotStatusOk = false;
+            hotspotError = status.error;
+        }
+        return;
+    }
+
+    if (!desired && hotspotEnabled) {
+        HotspotClient::Status status = hotspotClient.stop();
+        if (status.ok) {
+            hotspotStatusOk = true;
+            hotspotError.clear();
+            hotspotEnabled = status.isActive();
+        } else {
+            hotspotStatusOk = false;
+            hotspotError = status.error;
+        }
+    }
 }
 
 /**
@@ -162,8 +274,15 @@ void RearSeatPage::onToggleHotspotClicked()
 void RearSeatPage::updateWifiLabels()
 {
     // Ensure labels are up to date
-    ssidLabel->setText(QString("SSID:\n%1").arg(wifiSsid));
-    passwordLabel->setText(QString("Password:\n%1").arg(wifiPassword));
+    const QString ssidText = wifiSsid.isEmpty() ? "Unavailable" : wifiSsid;
+    QString passwordText = wifiPassword;
+    if (wifiEncryption == "nopass")
+        passwordText = "Open (no password)";
+    if (passwordText.isEmpty())
+        passwordText = "Unavailable";
+
+    ssidLabel->setText(QString("SSID:\n%1").arg(ssidText));
+    passwordLabel->setText(QString("Password:\n%1").arg(passwordText));
 
     // Define the single gray icon path
     QString iconPath = ":/icons/cast_dark.svg"; 
@@ -178,7 +297,7 @@ void RearSeatPage::updateWifiLabels()
         "   <b>Cast icon</b><br>"
         "   and select <b>%3</b><br>"
         "   to start streaming."
-    ).arg(wifiSsid)
+    ).arg(ssidText)
      .arg(iconPath)
      .arg(titleLabel->text()));
 }
@@ -190,34 +309,44 @@ void RearSeatPage::updateWifiLabels()
  */
 void RearSeatPage::updateHotspotUi()
 {
-    if (hotspotEnabled)
-    {
+    const bool hasConfig = hasValidHotspotConfig();
+
+    if (!hotspotStatusOk) {
+        statusLabel->setText("WiFi Hotspot: UNAVAILABLE");
+        statusLabel->setStyleSheet("font-size: 32px; font-weight: bold; color: orange;");
+        toggleButton->setText("Enable Hotspot");
+        toggleButton->setEnabled(false);
+    } else if (hotspotEnabled) {
         statusLabel->setText("WiFi Hotspot: ON");
         statusLabel->setStyleSheet("font-size: 32px; font-weight: bold; color: green;");
         toggleButton->setText("Disable Hotspot");
-
-        // Show connection area
-        qrPlaceholder->setVisible(true);
-        instructionContainer->setVisible(true); // Now visible
-        ssidLabel->setVisible(true);
-        passwordLabel->setVisible(true);
-        qrHintLabel->setVisible(false);
-
-        updateQrCode();
-    }
-    else
-    {
+        toggleButton->setEnabled(true);
+    } else {
         statusLabel->setText("WiFi Hotspot: OFF");
         statusLabel->setStyleSheet("font-size: 32px; font-weight: bold; color: red;");
         toggleButton->setText("Enable Hotspot");
-
-        // Hide connection area, show hint
-        qrPlaceholder->setVisible(false);
-        instructionContainer->setVisible(false); // Now hidden
-        ssidLabel->setVisible(false);
-        passwordLabel->setVisible(false);
-        qrHintLabel->setVisible(true);
+        toggleButton->setEnabled(true);
     }
+
+    const bool showConnectionDetails = hotspotStatusOk && hotspotEnabled && hasConfig;
+    qrPlaceholder->setVisible(showConnectionDetails);
+    instructionContainer->setVisible(showConnectionDetails);
+    ssidLabel->setVisible(showConnectionDetails);
+    passwordLabel->setVisible(showConnectionDetails);
+
+    if (showConnectionDetails) {
+        qrHintLabel->setVisible(false);
+        updateQrCode();
+        return;
+    }
+
+    qrHintLabel->setVisible(true);
+    if (!hotspotStatusOk)
+        qrHintLabel->setText("Hotspot service unavailable.");
+    else if (!hasConfig)
+        qrHintLabel->setText("Hotspot config missing.");
+    else
+        qrHintLabel->setText("Please enable the hotspot\nto connect your device.");
 }
 
 /**
@@ -228,9 +357,15 @@ void RearSeatPage::updateHotspotUi()
 QString RearSeatPage::createWifiQrPayload() const
 {
     // Payload format for WiFi QR code
-    return QString("WIFI:T:WPA;S:%1;P:%2;;")
-        .arg(wifiSsid)
-        .arg(wifiPassword);
+    const QString escapedSsid = escapeWifiQrField(wifiSsid);
+    if (wifiEncryption == "nopass") {
+        return QString("WIFI:T:nopass;S:%1;;").arg(escapedSsid);
+    }
+
+    return QString("WIFI:T:%1;S:%2;P:%3;;")
+        .arg(wifiEncryption)
+        .arg(escapedSsid)
+        .arg(escapeWifiQrField(wifiPassword));
 }
 
 /**
@@ -294,6 +429,10 @@ void RearSeatPage::updateQrCode()
 {
     // Only generate if visible/needed
     if (!qrPlaceholder->isVisible()) return;
+    if (!hasValidHotspotConfig()) {
+        qrLabel->clear();
+        return;
+    }
 
     const QString payload = createWifiQrPayload();
 

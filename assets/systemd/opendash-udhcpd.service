@@ -1,0 +1,13 @@
+[Unit]
+Description=OpenDash DHCP Server for Hotspot
+After=opendash-hotspot-net.service
+PartOf=hostapd.service
+
+[Service]
+Type=forking
+PIDFile=/run/udhcpd.pid
+ExecStart=/usr/sbin/udhcpd /etc/udhcpd.conf
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
