@@ -7,6 +7,7 @@
 
 namespace {
 const char *kHotspotEnabledKey = "Pages/RearSeat/hotspot_enabled";
+const char *kRemoteAppUrl = "https://play.google.com/store/apps/details?id=tech.simha.androidtvremote";
 }
 
 /**
@@ -42,21 +43,23 @@ void RearSeatPage::init()
     titleLabel->setAlignment(Qt::AlignCenter);
 
     // --- Content Area ---
-    auto *contentLayout = new QHBoxLayout();
+    contentContainer = new QWidget(this);
+    auto *contentLayout = new QHBoxLayout(contentContainer);
     contentLayout->setSpacing(40); 
+    contentLayout->setContentsMargins(0, 0, 0, 0);
 
     // 1. LEFT SIDE: Info Labels
     auto *infoLayout = new QVBoxLayout();
     
-    statusLabel = new QLabel("WiFi Hotspot: OFF", this);
+    statusLabel = new QLabel("WiFi Hotspot: OFF", contentContainer);
     statusLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     statusLabel->setStyleSheet("font-size: 32px; font-weight: bold; color: red;");
 
-    ssidLabel = new QLabel(this);
+    ssidLabel = new QLabel(contentContainer);
     ssidLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     ssidLabel->setStyleSheet("font-size: 28px;");
 
-    passwordLabel = new QLabel(this);
+    passwordLabel = new QLabel(contentContainer);
     passwordLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     passwordLabel->setStyleSheet("font-size: 28px;");
 
@@ -71,7 +74,7 @@ void RearSeatPage::init()
     qrContainerLayout->setAlignment(Qt::AlignCenter);
 
     // QR Box
-    qrPlaceholder = new QFrame(this);
+    qrPlaceholder = new QFrame(contentContainer);
     qrPlaceholder->setFixedSize(350, 350); 
     qrPlaceholder->setFrameShape(QFrame::Box);
     qrPlaceholder->setStyleSheet("background-color: white; border-radius: 15px;"); // Added rounded corners
@@ -86,7 +89,7 @@ void RearSeatPage::init()
     qrInnerLayout->addWidget(qrLabel);
 
     // Hint Label (Centered when hotspot is off)
-    qrHintLabel = new QLabel("Please enable the hotspot\nto connect your device.", this);
+    qrHintLabel = new QLabel("Please enable the hotspot\nto connect your device.", contentContainer);
     qrHintLabel->setAlignment(Qt::AlignCenter);
     qrHintLabel->setStyleSheet("font-size: 28px;");
     qrHintLabel->setVisible(false);
@@ -97,7 +100,7 @@ void RearSeatPage::init()
     qrContainerLayout->addStretch();
 
     // 3. RIGHT SIDE: Instructions (Container for visibility toggle)
-    instructionContainer = new QWidget(this);
+    instructionContainer = new QWidget(contentContainer);
     auto *instructionLayout = new QVBoxLayout(instructionContainer);
     instructionLayout->setSpacing(15);
     instructionLayout->setContentsMargins(0, 0, 0, 0);
@@ -141,9 +144,63 @@ void RearSeatPage::init()
     toggleButton->setStyleSheet("font-size: 24px; font-weight: bold;");
     connect(toggleButton, &QPushButton::clicked, this, &RearSeatPage::onToggleHotspotClicked);
 
+    // --- Remote App QR Toggle Button ---
+    appQrButton = new QPushButton("Show Remote App QR", this);
+    appQrButton->setFixedHeight(50);
+    appQrButton->setStyleSheet("font-size: 22px; font-weight: bold;");
+    connect(appQrButton, &QPushButton::clicked, this, &RearSeatPage::onToggleAppQrClicked);
+
+    // --- Remote App QR Container ---
+    appQrContainer = new QWidget(this);
+    auto *appQrLayout = new QHBoxLayout(appQrContainer);
+    appQrLayout->setSpacing(30);
+    appQrLayout->setContentsMargins(40, 10, 40, 10);
+
+    auto *appTextLayout = new QVBoxLayout();
+    appQrTitle = new QLabel("Android TV Remote Control", appQrContainer);
+    appQrTitle->setStyleSheet("font-size: 24px; font-weight: bold;");
+    appQrTitle->setAlignment(Qt::AlignLeft);
+
+    appQrBody = new QLabel(appQrContainer);
+    appQrBody->setWordWrap(true);
+    appQrBody->setStyleSheet("font-size: 20px;");
+    appQrBody->setText(
+        "Remote control for Android TV. Install the app from Google Play to "
+        "control the Rear Seat Entertainment system from your phone.\n"
+        "1. Scan the QR code with your phone.\n"
+        "2. Tap Install in Google Play.\n"
+        "3. Open the app and follow the on-screen pairing steps."
+    );
+
+    appTextLayout->addStretch();
+    appTextLayout->addWidget(appQrTitle);
+    appTextLayout->addWidget(appQrBody);
+    appTextLayout->addStretch();
+
+    appQrPlaceholder = new QFrame(appQrContainer);
+    appQrPlaceholder->setFixedSize(260, 260);
+    appQrPlaceholder->setFrameShape(QFrame::Box);
+    appQrPlaceholder->setStyleSheet("background-color: white; border-radius: 12px;");
+
+    auto *appQrInnerLayout = new QVBoxLayout(appQrPlaceholder);
+    appQrInnerLayout->setContentsMargins(16, 16, 16, 16);
+    appQrInnerLayout->setSpacing(0);
+
+    appQrLabel = new QLabel(appQrPlaceholder);
+    appQrLabel->setAlignment(Qt::AlignCenter);
+    appQrLabel->setScaledContents(false);
+    appQrInnerLayout->addWidget(appQrLabel);
+
+    appQrLayout->addLayout(appTextLayout, 1);
+    appQrLayout->addWidget(appQrPlaceholder, 0, Qt::AlignCenter);
+
+    appQrContainer->setVisible(false);
+
     // --- Final Assembly ---
     mainLayout->addWidget(titleLabel);
-    mainLayout->addLayout(contentLayout); 
+    mainLayout->addWidget(contentContainer); 
+    mainLayout->addWidget(appQrButton);
+    mainLayout->addWidget(appQrContainer);
     mainLayout->addWidget(toggleButton);
 
     // --- Initialize UI State ---
@@ -194,6 +251,20 @@ void RearSeatPage::onToggleHotspotClicked()
         refreshHotspotStatus();
     }
     updateHotspotUi();
+}
+
+void RearSeatPage::onToggleAppQrClicked()
+{
+    const bool show = !appQrContainer->isVisible();
+    appQrContainer->setVisible(show);
+    contentContainer->setVisible(!show);
+    toggleButton->setVisible(!show);
+    appQrButton->setText(show ? "Hide Remote App QR" : "Show Remote App QR");
+    if (show) {
+        updateAppQrCode();
+    } else {
+        updateHotspotUi();
+    }
 }
 
 void RearSeatPage::loadHostapdConfig()
@@ -349,6 +420,39 @@ void RearSeatPage::updateHotspotUi()
         qrHintLabel->setText("Please enable the hotspot\nto connect your device.");
 }
 
+void RearSeatPage::updateAppQrCode()
+{
+    if (!appQrContainer->isVisible()) {
+        return;
+    }
+
+    const QString payload = createAppQrPayload();
+    const int quietZone = 16;
+    const int targetSize = appQrPlaceholder->width() - (2 * quietZone);
+
+    QImage qrImage = QZXing::encodeData(
+        payload,
+        QZXing::EncoderFormat_QR_CODE,
+        QSize(targetSize, targetSize),
+        QZXing::EncodeErrorCorrectionLevel_L,
+        false,
+        false
+    );
+
+    if (qrImage.isNull()) {
+        appQrLabel->clear();
+        return;
+    }
+
+    QPixmap pixmap = QPixmap::fromImage(qrImage);
+    appQrLabel->setPixmap(pixmap.scaled(
+        targetSize,
+        targetSize,
+        Qt::KeepAspectRatio,
+        Qt::FastTransformation
+    ));
+}
+
 /**
  * Create WiFi QR payload
  *
@@ -366,6 +470,11 @@ QString RearSeatPage::createWifiQrPayload() const
         .arg(wifiEncryption)
         .arg(escapedSsid)
         .arg(escapeWifiQrField(wifiPassword));
+}
+
+QString RearSeatPage::createAppQrPayload() const
+{
+    return QString(kRemoteAppUrl);
 }
 
 /**

@@ -52,6 +52,13 @@ private:
     QLabel *instrBody;
     QWidget *instructionContainer; // We group the instructions to hide/show them easily
     QTimer *hotspotRefreshTimer = nullptr;
+    QWidget *contentContainer;      // Wrapper for hotspot content to toggle visibility
+    QPushButton *appQrButton;       // Button to show/hide app QR
+    QWidget *appQrContainer;        // Container for app QR and description
+    QLabel *appQrTitle;             // App QR title
+    QLabel *appQrBody;              // App QR description text
+    QFrame *appQrPlaceholder;       // Placeholder frame for app QR code
+    QLabel *appQrLabel;             // App QR code image
 
     bool hotspotEnabled = false; // Hotspot state
     bool hotspotStatusOk = false;
@@ -67,6 +74,7 @@ private:
     void updateHotspotUi();
     void updateWifiLabels();
     void updateQrCode();
+    void updateAppQrCode();
     QImage prepareQrForDisplay(const QImage &qr);
     QSize calculateQrSize() const;
     void loadHostapdConfig();
@@ -78,7 +86,9 @@ private:
 
 private slots:
     void onToggleHotspotClicked();
+    void onToggleAppQrClicked();
     QString createWifiQrPayload() const;
+    QString createAppQrPayload() const;
     QImage generateWifiQrImage(const QString &payload);
 
 private:
